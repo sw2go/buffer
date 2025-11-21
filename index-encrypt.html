@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Encrypt/Decrypt MP4 with Password</title>
+	<script src="buffer.js"></script>
+</head>
+<body>
+    <h2>Encrypt MP4</h2>
+    <input type="file" id="fileInput" accept="video/mp4">
+    <input type="password" id="password" placeholder="Enter password">
+    <button id="encryptBtn">Encrypt</button>
+
+    <h2>Decrypt MP4</h2>
+    <input type="file" id="encryptedInput">
+    <input type="password" id="passwordDecrypt" placeholder="Enter password">
+    <button id="decryptBtn">Decrypt</button>
+
+	    <video id="videoPlayer" controls width="400"></video>
+
+    <script>
+	
+        document.getElementById("encryptBtn").onclick = async () => {
+		
+            const file = document.getElementById("fileInput").files[0];
+            const password = document.getElementById("password").value;
+			
+            if (file && password) 
+			{
+			  const arrayBuffer = await file.arrayBuffer();
+			  
+			  const encryptedArrayBuffer = await BUFFER().encrypt(arrayBuffer, password);
+			  
+			  const filename = file.name + ".enc";
+			  
+			  BUFFER().saveAsFile(encryptedArrayBuffer, filename); 
+				
+			}
+        };
+
+        document.getElementById("decryptBtn").onclick = async () => {
+		
+            const file = document.getElementById("encryptedInput").files[0];
+			const arrayBuffer = await file.arrayBuffer();
+			
+            const password = document.getElementById("passwordDecrypt").value;
+			
+            if (arrayBuffer && password) 
+			{
+			  const decryptedArrayBuffer = await BUFFER().decrypt(arrayBuffer, password);
+			  			  
+		      const blob = new Blob([decryptedArrayBuffer], { type: "video/mp4" });
+              const url = URL.createObjectURL(blob);
+			  document.getElementById("videoPlayer").src = url;
+			}
+        };
+		
+    </script>
+</body>
+</html>

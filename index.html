@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Decrypt and Play MP4</title>
+	<script src="buffer.js"></script>
+</head>
+<body>
+    <h2>Play Encrypted MP4</h2>
+    <input type="password" id="password" placeholder="Enter password">
+    <button id="playBtn">Play Video</button>
+	
+
+    <script>
+	
+        document.getElementById("playBtn").onclick = async () => {
+            const password = document.getElementById("password").value;
+			// Fetch encrypted file from same folder on the server
+            const response = await fetch("01AK-Cha Cha Cha.mp4.enc"); // Change filename if needed
+            const arrayBuffer = await response.arrayBuffer();
+			
+            if (arrayBuffer && password) 
+			{ 
+				const decryptedArrayBuffer = await BUFFER().decrypt(arrayBuffer, password);
+				
+				if (decryptedArrayBuffer) 
+				{
+					BUFFER().displayInTab(decryptedArrayBuffer, "video/mp4");
+				}				
+			}
+        };
+		
+    </script>
+</body>
+</html>
