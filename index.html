@@ -1,18 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Decrypt and Play MP4</title>
+    <title>Decrypt and Show</title>
 	<script src="buffer.js"></script>
 </head>
 <body>
-    <h2>Play Encrypted MP4</h2>
+    <h2>Decrypt and show</h2>
     <input type="password" id="password" placeholder="Enter password">
-    <button id="playBtn">Play Video</button>
+    <button id="showTabBtn">show</button>
+	<input type="checkbox" id="showPlayer">below
+	<div>
+		<video id="videoPlayer" controls width="100%" autoplay muted playsinline style="display:none;" ></video>
+	</div>
+	
 	
 
     <script>
 	
-        document.getElementById("playBtn").onclick = async () => {
+	    const checkbox = document.getElementById("showPlayer");
+		const player = document.getElementById("videoPlayer");
+
+		
+		checkbox.addEventListener("change", () => {		
+			player.style.display = checkbox.checked ? "block" : "none";		
+		});
+
+	
+        document.getElementById("showTabBtn").onclick = async () => {
             const password = document.getElementById("password").value;
 			// Fetch encrypted file from same folder on the server
             const response = await fetch("01AK-Cha Cha Cha.mp4.enc"); // Change filename if needed
@@ -24,11 +38,19 @@
 				
 				if (decryptedArrayBuffer) 
 				{
-					BUFFER().displayInTab(decryptedArrayBuffer, "video/mp4");
+					if (!checkbox.checked) {
+						BUFFER().displayInTab(decryptedArrayBuffer, "video/mp4");
+					}
+					else {
+						const blob = new Blob([decryptedArrayBuffer], { type: "video/mp4" });
+						const url = URL.createObjectURL(blob);
+						player.src = url;
+						//player.play();
+					}
 				}				
 			}
         };
-		
+			
     </script>
 </body>
 </html>
