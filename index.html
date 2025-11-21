@@ -10,7 +10,7 @@
     <button id="showTabBtn">show</button>
 	<input type="checkbox" id="showPlayer">below
 	<div>
-		<video id="videoPlayer" controls width="100%" autoplay muted playsinline style="display:none;" ></video>
+		<video id="videoPlayer" controls width="100%" style="display:none;" ></video>
 	</div>
 	
 	
@@ -45,7 +45,7 @@
 						const blob = new Blob([decryptedArrayBuffer], { type: "video/mp4" });
 						const url = URL.createObjectURL(blob);
 						player.src = url;
-						//player.play();
+						player.play();
 					}
 				}				
 			}
