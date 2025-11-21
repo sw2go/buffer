@@ -39,7 +39,8 @@
 				if (decryptedArrayBuffer) 
 				{
 					if (!checkbox.checked) {
-						BUFFER().displayInTab(decryptedArrayBuffer, "video/mp4");
+						//BUFFER().displayInTab(decryptedArrayBuffer, "video/mp4");
+						BUFFER().openArrayBufferInNewWindow(decryptedArrayBuffer, "video/mp4");
 					}
 					else {
 						const blob = new Blob([decryptedArrayBuffer], { type: "video/mp4" });
