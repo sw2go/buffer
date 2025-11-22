@@ -1,8 +1,10 @@
 <!DOCTYPE html>
+<link rel="stylesheet" href="style.css">
 <html>
 <head>
     <title>Decrypt and Show</title>
 	<script src="buffer.js"></script>
+	<script src="db.js"></script>
 </head>
 <body>
     <h2>Decrypt and show</h2>
@@ -16,6 +18,13 @@
 	
 
     <script>
+	     // Register the service worker
+		if ('serviceWorker' in navigator) {
+		  navigator.serviceWorker.register('/sw.js').then(() => {
+			console.log('Service Worker registered');
+		  });
+		}
+	
 	
 	    const checkbox = document.getElementById("showPlayer");
 		const player = document.getElementById("videoPlayer");
@@ -40,7 +49,14 @@
 				{
 					if (!checkbox.checked) {
 						//BUFFER().displayInTab(decryptedArrayBuffer, "video/mp4");
-						BUFFER().openArrayBufferInNewWindow(decryptedArrayBuffer, "video/mp4");
+						//BUFFER().openArrayBufferInNewWindow(decryptedArrayBuffer, "video/mp4");
+						const blob = new Blob([decryptedArrayBuffer], { type: "video/mp4" });
+						await DB().saveToIndexedDB("files", "myFile", blob)
+						
+						// After decryption + storage
+                        window.open("/download/myFile", "_blank");
+                        // or <a href="/download/myfile" download>Download</a>
+
 					}
 					else {
 						const blob = new Blob([decryptedArrayBuffer], { type: "video/mp4" });

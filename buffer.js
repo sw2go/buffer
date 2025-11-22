@@ -106,47 +106,6 @@ function BUFFER() {
 		a.click();
 		URL.revokeObjectURL(url);		
 	}
-	
-/**
- * Open an ArrayBuffer in a new window/tab on iOS Safari (and other browsers).
- * Converts ArrayBuffer → Blob → Data URL → opens in new window.
- *
- * @param {ArrayBuffer} arrayBuffer - The binary data
- * @param {string} mimeType - MIME type (e.g. "text/plain", "image/png", "application/pdf")
- */
-buffer.openArrayBufferInNewWindow = (arrayBuffer, mimeType = "application/octet-stream") => {
-  const blob = new Blob([arrayBuffer], { type: mimeType });
-  const reader = new FileReader();
-
-  reader.onloadend = function () {
-    const dataUrl = reader.result;
-    const newWin = window.open();
-
-    if (newWin) {
-      if (mimeType.startsWith("image/")) {
-        newWin.document.write('<img src="' + dataUrl + '" style="max-width:100%;height:auto;">');
-      } else if (mimeType === "application/pdf") {
-        newWin.document.write('<iframe src="' + dataUrl + '" style="width:100%;height:100%;border:none;"></iframe>');
-      } else if (mimeType.startsWith("audio/")) {
-        newWin.document.write('<audio controls src="' + dataUrl + '"></audio>');
-      } else if (mimeType.startsWith("video/")) {
-        newWin.document.write('<video controls style="max-width:100%;height:auto;" src="' + dataUrl + '"></video>');
-      } else {
-        // Default: show raw text or download link
-        newWin.document.write('<pre>' + dataUrl + '</pre>');
-      }
-    } else {
-      alert("Popup blocked — allow popups to see the blob content.");
-    }
-  };
-
-  reader.readAsDataURL(blob);
-}
-
-	
-	
-	
-	
-	
+		
   return buffer;
 }
