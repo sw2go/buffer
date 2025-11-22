@@ -54,7 +54,23 @@
 						await DB().saveToIndexedDB("files", "myFile", blob)
 						
 						// After decryption + storage
-                        window.open("/download/myFile", "_blank");
+                        const newWin = window.open("/download/myFile", "_blank");
+						
+						// Periodically check if it's closed
+						const timer = setInterval(() => {
+						  if (newWin.closed) {
+							console.log('The window has been closed!');
+							clearInterval(timer); // stop checking
+							
+							// todo remove "myFile" from indexed db
+							
+							
+						  }
+						}, 1000); // check every second
+						
+						
+						
+						
                         // or <a href="/download/myfile" download>Download</a>
 
 					}

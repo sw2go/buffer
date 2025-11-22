@@ -1,6 +1,6 @@
 // sw.js
 
-importScripts('/db.js');
+importScripts('./db.js');
 
 self.addEventListener('install', event => {
   // Just ensure DB/cache exists, no need to preload
