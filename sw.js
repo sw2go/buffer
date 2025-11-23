@@ -15,10 +15,16 @@ self.addEventListener('activate', event => {
 self.addEventListener("fetch", event => {
   const url = new URL(event.request.url);
   console.log("fetsch " + url)
-  if (url.pathname.startsWith("/download/")) {
+  
+  const regex = /\/download\/([^\/\?]+)(?:\?.*)?$/;
+  const match = url.pathname.match(regex);
+  
+  if (match) {
+	const key = match[1];
+	console.log("read " + key)
     event.respondWith(
       (async () => {
-        const key = url.pathname.replace("/download/", "");
+        
         const blob = await DB().readFromIndexedDB("files", key);
         if (blob) {
           return new Response(blob, {
