@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Basic Video Viewer</title>
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .wrap { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    video { width: 100%; height: auto; background: #000; border-radius: 8px; }
+    .controls { margin-top: 1rem; display: flex; gap: .5rem; flex-wrap: wrap; }
+    button { padding: .5rem .75rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Basic Video Viewer</h1>
+
+    <!-- Replace src with your MP4 (H.264 video + AAC audio) -->
+    <video id="player" controls playsinline preload="metadata" poster="poster.jpg">
+      <source src="./download/myFile" type="video/mp4" />
+      Your browser does not support HTML5 video.
+    </video>
+
+    <div class="controls">
+      <button id="playBtn">Play</button>
+      <button id="pauseBtn">Pause</button>
+      <button id="muteBtn">Toggle Mute</button>
+    </div>
+  </div>
+
+  <script>
+    const v = document.getElementById('player');
+    document.getElementById('playBtn').addEventListener('click', () => v.play());
+    document.getElementById('pauseBtn').addEventListener('click', () => v.pause());
+    document.getElementById('muteBtn').addEventListener('click', () => v.muted = !v.muted);
+
+    // Helpful logs for debugging on iOS
+    v.addEventListener('error', () => console.log('Video error:', v.error));
+    v.addEventListener('loadedmetadata', () => console.log('Metadata loaded:', v.videoWidth, v.videoHeight));
+  </script>
+</body>
+</html>
