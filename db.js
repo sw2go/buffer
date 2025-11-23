@@ -31,6 +31,19 @@ function DB() {
 		});
 	}
 	
+	db.deleteFromIndexedDB = (storeName, key) => {
+		return new Promise((resolve, reject) => {
+			const request = indexedDB.open("myDB", 1);
+			request.onsuccess = e => {
+				const db = e.target.result;
+				const tx = db.transaction(storeName, "readwrite");
+				const req = tx.objectStore(storeName).delete(key);
+				req.onsuccess = () => resolve(true); // deleted successfully
+				req.onerror = reject;
+			};
+		});
+    }
+	
 	return db;
 }
 
