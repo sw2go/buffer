@@ -26,9 +26,6 @@ function DB() {
 	db.saveToIndexedDB = (storeName, key, blob) => {
 		return new Promise((resolve, reject) => {
 			const request = openDb("myDB", 1);
-			request.onupgradeneeded = e => {
-				e.target.result.createObjectStore(storeName);
-			};
 			request.onsuccess = e => {
 				const db = e.target.result;
 				const tx = db.transaction(storeName, "readwrite");
