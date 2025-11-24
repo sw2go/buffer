@@ -115,6 +115,7 @@ function BUFFER() {
 		{ 
 			return await buffer.decrypt(arrayBuffer, password);
 		}
+		
 		return null;
 	}
 	
