@@ -9,9 +9,20 @@
 <body>
     <h2>Decrypt and show</h2>
     <input type="password" id="password" placeholder="Enter password">
-    <button id="showTabBtn">show</button>
-		<button id="showTabBtn2">show2</button>
-	<button id="showTabBtn3">show3</button>
+    <button id="showTabBtn">show</button> 
+    
+	
+	<div>
+	   Mit SetInterval
+	   <button id="showTabBtn2">show2</button>
+	   <button id="showTabBtn3">show3</button>
+	</div>
+	<div>
+	   Mit ServiceWorker
+	   <button id="showTabBtnSave">save</button>
+	   <button id="showTabBtnShowSaved">show saved</button>
+	</div>
+
 	<input type="checkbox" id="showPlayer">below
 	<div>
 		<video id="videoPlayer" controls width="100%" style="display:none;" ></video>
@@ -86,16 +97,7 @@
 				}				
 			}
         };
-				
-
-		document.getElementById("showTabBtn3").onclick = () => {
-			
-			const password = document.getElementById("password").value;
-			BUFFER().showInNewTab("01AK-Cha Cha Cha.mp4.enc", password, "video/mp4");
-		};
-		
-		
-		
+						
 		document.getElementById("showTabBtn2").onclick = () => {
 		
 			let objectUrl = null;
@@ -132,6 +134,24 @@
 			  }
 			}, 100); // check every second	
 		};
+		
+		document.getElementById("showTabBtnSave").onclick = async () => {
+            const password = document.getElementById("password").value;
+			// Fetch encrypted file from same folder on the server
+            const response = await fetch("01AK-Cha Cha Cha.mp4.enc"); // Change filename if needed
+            const arrayBuffer = await response.arrayBuffer();
+			const decryptedArrayBuffer = await BUFFER().decrypt(arrayBuffer, password);
+            const blob = new Blob([decryptedArrayBuffer], { type: "video/mp4" });
+			await DB().saveToIndexedDB("files", "myFile", blob)			
+		};
+		
+		document.getElementById("showTabBtnShowSaved").onclick = () => {
+
+			window.open("./download/myFile", "_blank");
+
+		};
+
+		
 		
     </script>
 </body>
