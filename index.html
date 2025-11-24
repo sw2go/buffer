@@ -19,6 +19,7 @@
 	</div>
 	<div>
 	   Mit ServiceWorker
+	   <button id="delete">delete</button>
 	   <button id="showTabBtnSave">save</button>
 	   <button id="showTabBtnShowSaved">show saved</button>
 	</div>
@@ -156,6 +157,24 @@
 
 		};
 
+		document.getElementById("delete").onclick = () => {
+
+			// Delete the database named "myDatabase"
+			const deleteRequest = indexedDB.deleteDatabase("myDatabase");
+
+			deleteRequest.onsuccess = function () {
+			  alert("Database deleted successfully");
+			};
+
+			deleteRequest.onerror = function (event) {
+			  alert("Error deleting database:", event);
+			};
+
+			deleteRequest.onblocked = function () {
+			  alert("Delete blocked. Close all other tabs using this database.");
+			};
+
+		};
 		
 		
     </script>

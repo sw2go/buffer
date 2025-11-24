@@ -31,7 +31,7 @@ self.addEventListener("fetch", event => {
             headers: { "Content-Type": blob.type }
           });
         } else {
-          return new Response(key + "Not found", { status: 404 });
+          return new Response(key + " Not found", { status: 404 });
         }
       })()
     );
