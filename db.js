@@ -14,8 +14,8 @@ function DB() {
 	  return new Promise((resolve, reject) => {
 		const request = openDb("myDB", 1, storeName);
 		request.onsuccess = e => {
-		  const db = e.target.result;
-		  const tx = db.transaction(storeName, "readonly");
+		  const _db = e.target.result;
+		  const tx = _db.transaction(storeName, "readonly");
 		  const req = tx.objectStore(storeName).get(key);
 		  req.onsuccess = () => resolve(req.result);
 		  req.onerror = reject;
@@ -27,8 +27,8 @@ function DB() {
 		return new Promise((resolve, reject) => {
 			const request = openDb("myDB", 1, storeName);
 			request.onsuccess = e => {
-				const db = e.target.result;
-				const tx = db.transaction(storeName, "readwrite");
+				const _db = e.target.result;
+				const tx = _db.transaction(storeName, "readwrite");
 				tx.objectStore(storeName).put(blob, key);
 				tx.oncomplete = resolve;
 				tx.onerror = reject;
@@ -40,8 +40,8 @@ function DB() {
 		return new Promise((resolve, reject) => {
 			const request = openDb("myDB", 1, storeName);
 			request.onsuccess = e => {
-				const db = e.target.result;
-				const tx = db.transaction(storeName, "readwrite");
+				const _db = e.target.result;
+				const tx = _db.transaction(storeName, "readwrite");
 				const req = tx.objectStore(storeName).delete(key);
 				req.onsuccess = () => resolve(true); // deleted successfully
 				req.onerror = reject;
