@@ -119,7 +119,50 @@ function BUFFER() {
 		return null;
 	}
 	
-	
+	buffer.showInNewTab = (url, password, type) => {
+		
+			let objectUrl = null;
+			const bufPromise = buffer.getDecrypted(url, password);
+			
+			bufPromise.then(buffer => {
+			  if (!buffer) {
+				console.error("Fetch error:", buffer);
+				return false;
+			  }
+			  const blob = new Blob([buffer], { type } );
+			  objectUrl = URL.createObjectURL(blob);
+			  return true;	
+			})
+			.catch(err => {
+			  console.error("Network or processing error:", err);
+			});
+
+			// Periodically check if download and decryption has finished
+			const timeout  = 10 * 1000; // => 10  Seconds
+			const interval = 100;       // => 0.1 Seconds
+			let elapsed = 0;
+			const objectUrlChecker = setInterval(() => {
+			  if (objectUrl) {
+				console.log(objectUrl);
+				clearInterval(objectUrlChecker); // stop checking
+
+				const newTab = window.open(objectUrl, "_blank");
+	   
+				// Poll to check if the tab is closed to revoke url
+				const newTabChecker = setInterval(() => {
+				if (newTab.closed) {
+					clearInterval(newTabChecker);
+					URL.revokeObjectURL(objectUrl);                     
+				}}, 1000); // Check every second
+				
+			  } 
+			  else if (elapsed > timeout) {
+				  clearInterval(objectUrlChecker); // stop checking
+				  return null;
+			  }
+			  elapsed += interval;
+			}, interval); // check every second	
+		}
 		
   return buffer;
 }

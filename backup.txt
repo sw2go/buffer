@@ -1,0 +1,36 @@
+		document.getElementById("showTabBtn2").onclick = () => {
+		
+			let objectUrl = null;
+			const password = document.getElementById("password").value;
+			const BufPromise = BUFFER().getDecrypted("01AK-Cha Cha Cha.mp4.enc", password);
+			
+			BufPromise.then(buffer => {
+			  if (!buffer) {
+				console.error("Fetch error:", buffer);
+				return false;
+			  }
+			  const blob = new Blob([buffer], { type: "video/mp4" } );
+			  objectUrl = URL.createObjectURL(blob);
+			  return true;	
+			})
+			.catch(err => {
+			  console.error("Network or processing error:", err);
+			});
+
+			// Periodically check if it's closed
+			const timer = setInterval(() => {
+			  if (objectUrl) {
+				console.log(objectUrl);
+				clearInterval(timer); // stop checking
+
+				const newTab = window.open(objectUrl, "_blank");
+	   
+				// Poll to check if the tab is closed to revoke url
+				const checkClosed = setInterval(() => {
+				if (newTab.closed) {
+					clearInterval(checkClosed);
+					URL.revokeObjectURL(objectUrl);                     
+				}}, 1000); // Check every second
+			  }
+			}, 100); // check every second	
+		};
