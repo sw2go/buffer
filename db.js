@@ -2,9 +2,17 @@ function DB() {
 	
 	let db = {};
 	
+	let openDb = (dbName, version) => {
+		const request = indexedDB.open(dbName, version);
+		request.onupgradeneeded = e => {
+			e.target.result.createObjectStore(storeName);
+		};
+		return request;		
+	}
+	
 	db.readFromIndexedDB = (storeName, key) => {
 	  return new Promise((resolve, reject) => {
-		const request = indexedDB.open("myDB", 1);
+		const request = openDb("myDB", 1);
 		request.onsuccess = e => {
 		  const db = e.target.result;
 		  const tx = db.transaction(storeName, "readonly");
@@ -17,9 +25,9 @@ function DB() {
 	
 	db.saveToIndexedDB = (storeName, key, blob) => {
 		return new Promise((resolve, reject) => {
-			const request = indexedDB.open("myDB", 1);
+			const request = openDb("myDB", 1);
 			request.onupgradeneeded = e => {
-			e.target.result.createObjectStore(storeName);
+				e.target.result.createObjectStore(storeName);
 			};
 			request.onsuccess = e => {
 				const db = e.target.result;
@@ -33,7 +41,7 @@ function DB() {
 	
 	db.deleteFromIndexedDB = (storeName, key) => {
 		return new Promise((resolve, reject) => {
-			const request = indexedDB.open("myDB", 1);
+			const request = openDb("myDB", 1);
 			request.onsuccess = e => {
 				const db = e.target.result;
 				const tx = db.transaction(storeName, "readwrite");

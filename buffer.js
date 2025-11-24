@@ -106,6 +106,19 @@ function BUFFER() {
 		a.click();
 		URL.revokeObjectURL(url);		
 	}
+	
+	buffer.getDecrypted = async (url, password) => {
+		const response = await fetch(url);
+        const arrayBuffer = await response.arrayBuffer();
+		
+		if (arrayBuffer) 
+		{ 
+			return await buffer.decrypt(arrayBuffer, password);
+		}
+		return null;
+	}
+	
+	
 		
   return buffer;
 }
