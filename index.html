@@ -143,7 +143,19 @@
             const arrayBuffer = await response.arrayBuffer();
 			const decryptedArrayBuffer = await BUFFER().decrypt(arrayBuffer, password);
             const blob = new Blob([decryptedArrayBuffer], { type: "video/mp4" });
-			await DB().saveToIndexedDB("files", "myFile", blob);
+			
+			try {
+			  // Code that may throw an error
+			  await DB().saveToIndexedDB("files", "myFile", blob);
+			  
+			} catch (error) {
+			  // Code to handle the error
+			  alert("Something went wrong:", error.message);
+			}
+			
+			
+			
+		
 
 			const x = await DB().readFromIndexedDB("files", "myFile", blob);
 			
