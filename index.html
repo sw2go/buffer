@@ -142,12 +142,17 @@
             const arrayBuffer = await response.arrayBuffer();
 			const decryptedArrayBuffer = await BUFFER().decrypt(arrayBuffer, password);
             const blob = new Blob([decryptedArrayBuffer], { type: "video/mp4" });
-			await DB().saveToIndexedDB("files", "myFile", blob)			
+			await DB().saveToIndexedDB("files", "myFile", blob);
+
+			const x = await DB().readFromIndexedDB("files", "myFile", blob);
+			
+			alert(x);
+			
 		};
 		
 		document.getElementById("showTabBtnShowSaved").onclick = () => {
 
-			window.open("./download/myFile", "_blank");
+			window.open("download/myFile", "_blank");
 
 		};
 
