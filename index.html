@@ -16,6 +16,7 @@
 	   Mit SetInterval
 	   <button id="showTabBtn2">show2</button>
 	   <button id="showTabBtn3">show3</button>
+	   <button id="showTabBtn4">show4</button>
 	</div>
 	<div>
 	   Mit ServiceWorker
@@ -187,6 +188,31 @@
 			};
 
 		};
+		
+		
+		document.getElementById("showTabBtn4").onclick = () => {
+
+			const newWin = window.open("about:blank", "_blank");
+			
+			
+			// Async load data
+			void (async () => {
+				const password = document.getElementById("password").value;
+				const decryptedArrayBuffer = await BUFFER().getDecrypted("01AK-Cha Cha Cha.mp4.enc", password);
+				const blob = new Blob([decryptedArrayBuffer], { type: "video/mp4" });
+				const objectUrl = URL.createObjectURL(blob);
+				
+				// Update the opened window with the real URL or content
+				newWin.location.href = objectUrl; // or write content
+			})();
+
+			
+		};
+		
+		
+		
+		
+		
 		
 		
     </script>
