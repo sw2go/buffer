@@ -1,0 +1,95 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Stream Decrypt & Play Video</title>
+</head>
+<body>
+    <h2>Stream AES-CTR Decrypted Video</h2>
+    <input type="password" id="password" placeholder="Enter password"><br><br>
+    <button id="playBtn">Play Video</button>
+    <video id="video" controls width="640"></video>
+
+    <script>
+        async function deriveKey(password, salt) {
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw",
+                enc.encode(password),
+                { name: "PBKDF2" },
+                false,
+                ["deriveKey"]
+            );
+            return crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt: salt,
+                    iterations: 100000,
+                    hash: "SHA-256"
+                },
+                keyMaterial,
+                { name: "AES-CTR", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        function incrementCounter(counter) {
+            for (let i = counter.length - 1; i >= 0; i--) {
+                counter[i]++;
+                if (counter[i] !== 0) break;
+            }
+        }
+
+        async function streamAndDecrypt(url, password, videoElement) {
+            const response = await fetch(url);
+            const reader = response.body.getReader();
+
+            // Read header: salt (16 bytes) + initial counter (16 bytes)
+            const header = await reader.read();
+            const headerBytes = header.value;
+            const salt = headerBytes.slice(0, 16);
+            const counter = headerBytes.slice(16, 32);
+            const key = await deriveKey(password, salt);
+
+            // Setup MediaSource
+            const mediaSource = new MediaSource();
+            videoElement.src = URL.createObjectURL(mediaSource);
+
+            mediaSource.addEventListener('sourceopen', async () => {
+                const sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E"');
+
+                // Read and decrypt chunks
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const decryptedChunk = await crypto.subtle.decrypt(
+                        { name: "AES-CTR", counter: counter, length: 64 },
+                        key,
+                        value
+                    );
+
+                    sourceBuffer.appendBuffer(new Uint8Array(decryptedChunk));
+                    incrementCounter(counter);
+                }
+
+                mediaSource.endOfStream();
+            });
+        }
+
+        document.getElementById('playBtn').addEventListener('click', async () => {
+            const password = document.getElementById('password').value;
+            if (!password) {
+                alert("Please enter a password.");
+                return;
+            }
+
+            const videoElement = document.getElementById('video');
+            const videoUrl = './03AK-FKB-Rumba.mp4.enc'; // Replace with your server URL
+            await streamAndDecrypt(videoUrl, password, videoElement);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>AES-CTR File Encryptor</title>
+</head>
+<body>
+    <h2>AES-CTR File Encryption Demo</h2>
+    <input type="file" id="fileInput"><br><br>
+    <input type="password" id="password" placeholder="Enter password"><br><br>
+    <button id="encryptBtn">Encrypt & Download</button>
+
+    <script>
+        async function deriveKey(password, salt) {
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw",
+                enc.encode(password),
+                { name: "PBKDF2" },
+                false,
+                ["deriveKey"]
+            );
+            return crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt: salt,
+                    iterations: 100000,
+                    hash: "SHA-256"
+                },
+                keyMaterial,
+                { name: "AES-CTR", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        function incrementCounter(counter) {
+            for (let i = counter.length - 1; i >= 0; i--) {
+                counter[i]++;
+                if (counter[i] !== 0) break;
+            }
+        }
+
+        async function encryptFile(file, password) {
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const counter = crypto.getRandomValues(new Uint8Array(16));
+            const key = await deriveKey(password, salt);
+
+            const reader = file.stream().getReader();
+            const encryptedChunks = [];
+            let chunkIndex = 0;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const encryptedChunk = await crypto.subtle.encrypt(
+                    { name: "AES-CTR", counter: counter, length: 64 },
+                    key,
+                    value
+                );
+                encryptedChunks.push(new Uint8Array(encryptedChunk));
+
+                incrementCounter(counter);
+                chunkIndex++;
+            }
+
+            // Combine salt + initial counter + encrypted data
+            const totalLength = salt.length + 16 + encryptedChunks.reduce((sum, c) => sum + c.length, 0);
+            const output = new Uint8Array(totalLength);
+            output.set(salt, 0);
+            output.set(counter, salt.length); // store final counter or initial? (better store initial)
+            let offset = salt.length + 16;
+            for (const chunk of encryptedChunks) {
+                output.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            return output;
+        }
+
+        document.getElementById('encryptBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('fileInput');
+            const password = document.getElementById('password').value;
+
+            if (!fileInput.files.length || !password) {
+                alert("Please select a file and enter a password.");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const encryptedData = await encryptFile(file, password);
+
+            const blob = new Blob([encryptedData], { type: "application/octet-stream" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name + ".enc";
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+    </script>
+</body>
+</html>
