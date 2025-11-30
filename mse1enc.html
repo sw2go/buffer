@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Encrypt MP4 with WebCrypto</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 800px; }
+    label { display: block; margin: 0.6rem 0 0.2rem; }
+    input[type="text"] { width: 100%; padding: 0.4rem; }
+    .row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .row > div { flex: 1; min-width: 240px; }
+    button { margin-top: 1rem; padding: 0.5rem 0.9rem; }
+    #log { white-space: pre-wrap; margin-top: 1rem; font-size: 0.9rem; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .small { font-size: 0.9rem; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Encrypt MP4 with WebCrypto (AES-CBC or AES-CTR)</h1>
+
+  <div class="row">
+    <div>
+      <label for="file">Source MP4/fMP4 file</label>
+      <input id="file" type="file" accept=".mp4,.m4s,.m4f,.ismv,.isml,.mov" />
+      <div class="small">For MSE playback later, prefer fragmented MP4 (fMP4).</div>
+    </div>
+    <div>
+      <label>Encryption mode</label>
+      <label><input type="radio" name="mode" value="AES-CBC" checked> AES-CBC (simple, adds padding)</label>
+      <label><input type="radio" name="mode" value="AES-CTR"> AES-CTR (no padding, stream-friendly)</label>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label for="keyHex">Key (hex, 16 or 32 bytes)</label>
+      <input id="keyHex" class="mono" type="text" placeholder="00112233445566778899aabbccddeeff" />
+      <button id="genKeyBtn" type="button">Generate random key</button>
+    </div>
+    <div>
+      <label for="ivHex">IV / Counter (hex, 16 bytes)</label>
+      <input id="ivHex" class="mono" type="text" placeholder="0102030405060708090a0b0c0d0e0f10" />
+      <button id="genIvBtn" type="button">Generate random IV</button>
+    </div>
+  </div>
+
+  <button id="encryptBtn" type="button">Encrypt file</button>
+
+  <div id="log"></div>
+
+  <h2>Output</h2>
+  <div id="out">
+    <div><strong>Key (hex):</strong> <span id="outKey" class="mono"></span></div>
+    <div><strong>IV (hex):</strong> <span id="outIv" class="mono"></span></div>
+    <div class="small">Use these in your MSE/WebCrypto player to decrypt.</div>
+    <p id="downloadWrap" style="display:none;">
+      <a id="downloadLink" download class="mono">Download encrypted file</a>
+    </p>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('file');
+    const encryptBtn = document.getElementById('encryptBtn');
+    const genKeyBtn = document.getElementById('genKeyBtn');
+    const genIvBtn = document.getElementById('genIvBtn');
+    const keyHexInput = document.getElementById('keyHex');
+    const ivHexInput = document.getElementById('ivHex');
+    const outKey = document.getElementById('outKey');
+    const outIv = document.getElementById('outIv');
+    const downloadWrap = document.getElementById('downloadWrap');
+    const downloadLink = document.getElementById('downloadLink');
+    const logEl = document.getElementById('log');
+
+    function log(msg) { console.log(msg); logEl.textContent += msg + '\n'; }
+    function toHex(u8) { return [...u8].map(b => b.toString(16).padStart(2,'0')).join(''); }
+    function fromHex(hex) {
+      const clean = hex.trim().toLowerCase();
+      if (!/^[0-9a-f]*$/.test(clean) || clean.length % 2 !== 0) throw new Error('Invalid hex');
+      const out = new Uint8Array(clean.length / 2);
+      for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i*2,2), 16);
+      return out;
+    }
+    function randomBytes(n) { const u = new Uint8Array(n); crypto.getRandomValues(u); return u; }
+
+    genKeyBtn.addEventListener('click', () => {
+      const u = randomBytes(16); // 128-bit key (use 32 bytes for AES-256 if you like)
+      keyHexInput.value = toHex(u);
+    });
+    genIvBtn.addEventListener('click', () => {
+      const u = randomBytes(16); // 128-bit IV/counter
+      ivHexInput.value = toHex(u);
+    });
+
+    encryptBtn.addEventListener('click', async () => {
+      try {
+        const file = fileInput.files[0];
+        if (!file) throw new Error('Select a source file first.');
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+
+        // Prepare key and IV
+        const keyBytes = keyHexInput.value ? fromHex(keyHexInput.value) : randomBytes(16);
+        const ivBytes  = ivHexInput.value ? fromHex(ivHexInput.value) : randomBytes(16);
+
+        // Constraints
+        if (![16, 32].includes(keyBytes.length)) throw new Error('Key must be 16 or 32 bytes.');
+        if (ivBytes.length !== 16) throw new Error('IV must be 16 bytes.');
+
+        outKey.textContent = toHex(keyBytes);
+        outIv.textContent = toHex(ivBytes);
+        log('Reading file...');
+        const buf = await file.arrayBuffer();
+        log('File size: ' + buf.byteLength + ' bytes');
+
+        // Import key
+        const algo = { name: mode };
+        const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, algo, false, ['encrypt']);
+
+        // For AES-CTR, build params with counter and length
+        let params;
+        if (mode === 'AES-CTR') {
+          params = { name: 'AES-CTR', counter: ivBytes, length: 64 }; // 64-bit counter length is typical
+        } else {
+          params = { name: 'AES-CBC', iv: ivBytes };
+        }
+
+        log('Encrypting...');
+        const encrypted = await crypto.subtle.encrypt(params, cryptoKey, buf);
+        log('Encrypted size: ' + encrypted.byteLength + ' bytes' +
+            (mode === 'AES-CBC' ? ' (includes PKCS#7 padding)' : ''));
+
+        // Offer download
+        const ext = mode === 'AES-CBC' ? '.enc.cbc' : '.enc.ctr';
+        const outName = (file.name.replace(/\.[^/.]+$/, '') || 'encrypted') + ext;
+        const blob = new Blob([encrypted], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        downloadLink.href = url;
+        downloadLink.textContent = outName;
+        downloadLink.setAttribute('download', outName);
+        downloadWrap.style.display = 'block';
+        log('Ready. Download and then decrypt in the MSE player with the same mode, key, and IV.');
+      } catch (e) {
+        log('Error: ' + e.message);
+      }
+    });
+  </script>
+</body>
+</html>

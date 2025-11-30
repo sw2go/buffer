@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MSE fMP4 player (WebCrypto)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; }
+    video { width: 100%; max-width: 800px; background: #000; }
+    #log { white-space: pre-wrap; margin-top: 1rem; font-size: 0.9rem; }
+    button { margin-right: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>MSE fragmented MP4 player (WebCrypto)</h1>
+
+  <video id="video" controls></video>
+  <div>
+    <label for="keyHex">Key (hex, 16 or 32 bytes)</label>
+    <input id="keyHex" class="mono" type="text" placeholder="" />
+  </div>
+  <div>
+    <label for="keyHex">IV / Counter (hex, 16 bytes)</label>
+    <input id="ivHex" class="mono" type="text" placeholder="" />
+  </div>
+  <div>      
+    <button id="playBtn">Play</button>
+    <button id="stopBtn">Stop</button>
+  </div>
+  <div id="log"></div>
+
+  <script>
+    // Path to your encrypted fragmented MP4
+    const VIDEO_URL = 'output_frag.enc.cbc';
+
+    // Codec string must match your content
+    const CODECS = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+
+    // AES key and IV (example values, replace with your own)
+    const KEY_HEX = '....'; // 16 bytes hex
+    const IV_HEX  = '....'; // 16 bytes hex
+
+	const keyHexInput = document.getElementById('keyHex');
+	const ivHexInput = document.getElementById('ivHex');
+
+    const videoEl = document.getElementById('video');
+
+    const playBtn = document.getElementById('playBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const logEl = document.getElementById('log');
+
+    function log(msg) {
+      console.log(msg);
+      logEl.textContent += msg + '\n';
+    }
+
+    let mediaSource = null;
+    let sourceBuffer = null;
+    let aborted = false;
+
+    function hexToBytes(hex) {
+      return new Uint8Array(hex.match(/.{2}/g).map(b => parseInt(b, 16)));
+    }
+
+    async function importKey() {
+      const rawKey = hexToBytes(keyHexInput.value);   // KEY_HEX
+      return crypto.subtle.importKey(
+        'raw',
+        rawKey,
+        { name: 'AES-CBC' }, // or AES-CTR depending on your encryption
+        false,
+        ['decrypt']
+      );
+    }
+
+    playBtn.addEventListener('click', async () => {
+      try {
+        await start();
+      } catch (e) {
+        log('Start error: ' + e.message);
+      }
+    });
+
+    stopBtn.addEventListener('click', () => stop());
+
+    function canPlay() {
+      const ms = !!window.MediaSource;
+      const ok = ms && MediaSource.isTypeSupported(CODECS);
+      log(`MSE available: ${ms}, codecs supported: ${ok}`);
+      return ok;
+    }
+
+    async function start() {
+      if (!canPlay()) {
+        alert('Browser does not support required MSE codecs.');
+        return;
+      }
+
+      aborted = false;
+      mediaSource = new MediaSource();
+      videoEl.src = URL.createObjectURL(mediaSource);
+
+      mediaSource.addEventListener('sourceopen', onSourceOpen, { once: true });
+      mediaSource.addEventListener('error', e => log('MediaSource error: ' + e));
+
+      videoEl.addEventListener('canplay', () => {
+        videoEl.play().catch(err => log('Autoplay failed: ' + err));
+      }, { once: true });
+    }
+
+    function stop() {
+      log('Stopping playback.');
+      aborted = true;
+      try {
+        if (sourceBuffer && sourceBuffer.updating) sourceBuffer.abort();
+        if (mediaSource && mediaSource.readyState === 'open') mediaSource.endOfStream();
+      } catch (e) { log('Stop error: ' + e); }
+      videoEl.removeAttribute('src');
+      videoEl.load();
+      sourceBuffer = null;
+      mediaSource = null;
+    }
+
+    async function onSourceOpen() {
+      log('MediaSource opened.');
+      try {
+        sourceBuffer = mediaSource.addSourceBuffer(CODECS);
+      } catch (e) {
+        log('Failed to add SourceBuffer: ' + e);
+        mediaSource.endOfStream('decode');
+        return;
+      }
+
+      sourceBuffer.mode = 'segments';
+      sourceBuffer.addEventListener('error', e => log('SourceBuffer error: ' + e));
+
+      try {
+        log('Fetching encrypted media...');
+        const res = await fetch(VIDEO_URL);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const encryptedBuf = await res.arrayBuffer();
+        log('Download complete: ' + encryptedBuf.byteLength + ' bytes.');
+
+        // Decrypt with WebCrypto
+        const cryptoKey = await importKey();
+        const iv = hexToBytes(ivHexInput.value);    // IV_HEX
+        log('Decrypting...');
+        const decryptedBuf = await crypto.subtle.decrypt(
+          { name: 'AES-CBC', iv },
+          cryptoKey,
+          encryptedBuf
+        );
+        log('Decryption complete: ' + decryptedBuf.byteLength + ' bytes.');
+
+        // Append decrypted data in chunks
+        const chunkSize = 512 * 1024;
+        let offset = 0;
+        while (offset < decryptedBuf.byteLength && !aborted) {
+          const end = Math.min(offset + chunkSize, decryptedBuf.byteLength);
+          const chunk = decryptedBuf.slice(offset, end);
+          offset = end;
+          await appendChunk(chunk);
+        }
+
+        if (!aborted && mediaSource.readyState === 'open') {
+          mediaSource.endOfStream();
+          log('endOfStream called.');
+        }
+      } catch (err) {
+        log('Decrypt/append failed: ' + err.message);
+        try {
+          if (mediaSource.readyState === 'open') mediaSource.endOfStream('network');
+        } catch {}
+      }
+    }
+
+    function appendChunk(chunk) {
+      return new Promise((resolve, reject) => {
+        try {
+          sourceBuffer.appendBuffer(chunk);
+        } catch (e) {
+          reject(e);
+          return;
+        }
+        sourceBuffer.addEventListener('updateend', () => resolve(), { once: true });
+        sourceBuffer.addEventListener('error', ev => reject(ev), { once: true });
+      });
+    }
+  </script>
+</body>
+</html>

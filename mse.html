@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MSE fMP4 player</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; }
+    video { width: 100%; max-width: 800px; background: #000; }
+    #log { white-space: pre-wrap; margin-top: 1rem; font-size: 0.9rem; }
+    button { margin-right: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>MSE fragmented MP4 player</h1>
+
+  <video id="video" controls></video>
+  <div>
+    <button id="playBtn">Play</button>
+    <button id="stopBtn">Stop</button>
+  </div>
+  <div id="log"></div>
+
+  <script>
+    const VIDEO_URL = 'output_frag.mp4'; // your fMP4 file path
+    // Choose the right codec string for your content:
+    // H.264 Baseline/Main: avc1.42E01E or avc1.4D401E or avc1.64001E (depends on profile/level)
+    // AAC LC: mp4a.40.2
+    const CODECS = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+
+    const videoEl = document.getElementById('video');
+    const playBtn = document.getElementById('playBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const logEl = document.getElementById('log');
+
+    function log(msg) {
+      console.log(msg);
+      logEl.textContent += msg + '\n';
+    }
+
+    let mediaSource = null;
+    let sourceBuffer = null;
+    let reader = null;
+    let appending = false;
+    let queue = [];
+
+    function canPlay() {
+      const ok = MediaSource.isTypeSupported(CODECS);
+      log(`MSE supported: ${!!window.MediaSource}, codecs supported: ${ok}`);
+      return ok;
+    }
+
+    async function start() {
+      if (!canPlay()) {
+        alert('Browser does not support required MSE codecs.');
+        return;
+      }
+
+      mediaSource = new MediaSource();
+      videoEl.src = URL.createObjectURL(mediaSource);
+
+      mediaSource.addEventListener('sourceopen', onSourceOpen, { once: true });
+      mediaSource.addEventListener('error', e => log('MediaSource error: ' + e));
+    }
+
+    async function onSourceOpen() {
+      log('MediaSource opened.');
+      try {
+        sourceBuffer = mediaSource.addSourceBuffer(CODECS);
+      } catch (e) {
+        log('Failed to add SourceBuffer: ' + e);
+        mediaSource.endOfStream('decode');
+        return;
+      }
+
+      sourceBuffer.mode = 'segments'; // suitable for fMP4
+      sourceBuffer.addEventListener('error', e => log('SourceBuffer error: ' + e));
+      sourceBuffer.addEventListener('updateend', onUpdateEnd);
+
+      // Start fetching
+      try {
+        const res = await fetch(VIDEO_URL);
+        if (!res.ok || !res.body) {
+          throw new Error('Bad response or missing body stream: ' + res.status);
+        }
+        reader = res.body.getReader();
+        pump(); // start reading chunks
+      } catch (err) {
+        log('Fetch failed: ' + err.message);
+        mediaSource.endOfStream('network');
+      }
+    }
+
+    async function pump() {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          log('Download finished.');
+          // Signal end of stream once all queued data is appended.
+          if (!sourceBuffer.updating && queue.length === 0 && mediaSource.readyState === 'open') {
+            try {
+              mediaSource.endOfStream();
+              log('endOfStream called.');
+            } catch (e) {
+              log('endOfStream error: ' + e);
+            }
+          }
+          break;
+        }
+        queue.push(value);
+        appendNext();
+      }
+    }
+
+    function appendNext() {
+      if (appending || !queue.length || sourceBuffer.updating) return;
+      appending = true;
+      const chunk = queue.shift();
+      try {
+        sourceBuffer.appendBuffer(chunk);
+      } catch (e) {
+        appending = false;
+        log('appendBuffer error: ' + e);
+        // If quota exceeded, try small backoff
+        if (String(e).toLowerCase().includes('quota')) {
+          setTimeout(appendNext, 200);
+        }
+      }
+    }
+
+    function onUpdateEnd() {
+      appending = false;
+
+      // Optional: trim buffer to avoid memory growth
+      const buffered = sourceBuffer.buffered;
+      if (buffered.length) {
+        const current = videoEl.currentTime;
+        const pruneBefore = Math.max(0, current - 30); // keep last ~30s
+        try {
+          if (pruneBefore > 0) {
+            sourceBuffer.remove(0, pruneBefore);
+          }
+        } catch (e) {
+          log('Buffer remove error: ' + e);
+        }
+      }
+

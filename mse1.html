@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MSE fMP4 player</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; }
+    video { width: 100%; max-width: 800px; background: #000; }
+    #log { white-space: pre-wrap; margin-top: 1rem; font-size: 0.9rem; }
+    button { margin-right: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>MSE fragmented MP4 player</h1>
+
+  <video id="video" controls></video>
+  <div>
+    <button id="playBtn">Play</button>
+    <button id="stopBtn">Stop</button>
+  </div>
+  <div id="log"></div>
+
+  <script>
+    // Path to your fragmented MP4 (init segment + media segments)
+    const VIDEO_URL = 'output_frag.mp4';
+
+    // Adjust codec string to match your actual content (see notes below)
+    const CODECS = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+
+    const videoEl = document.getElementById('video');
+    const playBtn = document.getElementById('playBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const logEl = document.getElementById('log');
+
+    function log(msg) {
+      console.log(msg);
+      logEl.textContent += msg + '\n';
+    }
+
+    let mediaSource = null;
+    let sourceBuffer = null;
+    let aborted = false;
+
+    function canPlay() {
+      const ms = !!window.MediaSource;
+      const ok = ms && MediaSource.isTypeSupported(CODECS);
+      log(`MSE available: ${ms}, codecs supported: ${ok}`);
+      return ok;
+    }
+
+    playBtn.addEventListener('click', async () => {
+      try {
+        await start();
+      } catch (e) {
+        log('Start error: ' + e.message);
+      }
+    });
+
+    stopBtn.addEventListener('click', () => {
+      stop();
+    });
+
+    async function start() {
+      if (!canPlay()) {
+        alert('Browser does not support required MSE codecs.');
+        return;
+      }
+
+      aborted = false;
+      mediaSource = new MediaSource();
+      videoEl.src = URL.createObjectURL(mediaSource);
+
+      mediaSource.addEventListener('sourceopen', onSourceOpen, { once: true });
+      mediaSource.addEventListener('error', e => log('MediaSource error: ' + e));
+
+      // Optional: auto-play when ready
+      videoEl.addEventListener('canplay', () => {
+        videoEl.play().catch(err => log('Autoplay failed: ' + err));
+      }, { once: true });
+    }
+
+    function stop() {
+      log('Stopping playback.');
+      aborted = true;
+
+      try {
+        if (sourceBuffer) {
+          // Abort any ongoing appends
+          if (sourceBuffer.updating) sourceBuffer.abort();
+        }
+      } catch (e) {
+        log('Abort error: ' + e);
+      }
+
+      try {
+        if (mediaSource && mediaSource.readyState === 'open') {
+          mediaSource.endOfStream();
+        }
+      } catch (e) {
+        log('endOfStream on stop error: ' + e);
+      }
+
+      // Detach to free memory
+      videoEl.removeAttribute('src');
+      videoEl.load();
+
+      sourceBuffer = null;
+      mediaSource = null;
+    }
+
+    async function onSourceOpen() {
+      log('MediaSource opened.');
+      try {
+        sourceBuffer = mediaSource.addSourceBuffer(CODECS);
+      } catch (e) {
+        log('Failed to add SourceBuffer: ' + e);
+        mediaSource.endOfStream('decode');
+        return;
+      }
+
+      sourceBuffer.mode = 'segments'; // For ISO BMFF fMP4
+      sourceBuffer.addEventListener('error', e => log('SourceBuffer error: ' + e));
+
+      // Fetch the entire file as a single ArrayBuffer to avoid box-splitting
+      // If your server/file is truly segmented, you can switch to segment-aware appends.
+      try {
+        log('Fetching media...');
+        const res = await fetch(VIDEO_URL);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const fullBuf = await res.arrayBuffer();
+        log('Download complete: ' + fullBuf.byteLength + ' bytes.');
+
+        // Append in safe chunks to reduce quota issues, while preserving box boundaries
+        // Since we don’t parse boxes here, we use medium chunk sizes and wait on updateend.
+        const chunkSize = 512 * 1024; // 512KB
+        let offset = 0;
+
+        const appendChunk = () => new Promise((resolve, reject) => {
+          if (aborted) { resolve(); return; }
+
+          const end = Math.min(offset + chunkSize, fullBuf.byteLength);
+          const chunk = fullBuf.slice(offset, end);
+          offset = end;
+
+          try {
+		    console.log("app");
+            sourceBuffer.appendBuffer(chunk);
+          } catch (e) {
+            reject(e);
+            return;
+          }
+
+          const onEnd = () => {
+            sourceBuffer.removeEventListener('updateend', onEnd);
+            resolve();
+          };
+          const onErr = (ev) => {
+            sourceBuffer.removeEventListener('error', onErr);
+            reject(ev);
+          };
+          sourceBuffer.addEventListener('updateend', onEnd, { once: true });
+          sourceBuffer.addEventListener('error', onErr, { once: true });
+        });
+
+        while (offset < fullBuf.byteLength && !aborted) {
+          await appendChunk();
+          // Optional pruning to limit memory
+          try {
+            const current = videoEl.currentTime || 0;
+            const pruneBefore = Math.max(0, current - 30); // keep ~30s behind
+            if (pruneBefore > 0 && sourceBuffer.buffered && sourceBuffer.buffered.length) {
+              sourceBuffer.remove(0, pruneBefore);
+            }
+          } catch (e) {
+            log('Buffer remove error: ' + e);
+          }
+        }
+
+        if (!aborted && mediaSource.readyState === 'open') {
+          try {
+            mediaSource.endOfStream();
+            log('endOfStream called.');
+          } catch (e) {
+            log('endOfStream error: ' + e);
+          }
+        }
+      } catch (err) {
+        log('Fetch/append failed: ' + err.message);
+        try {
+          if (mediaSource.readyState === 'open') {
+            mediaSource.endOfStream('network');
+          }
+        } catch {}
+      }
+    }
+  </script>
+</body>
+</html>
