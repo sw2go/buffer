@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>HLS player with manual key input</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; }
+    video { width: 100%; max-width: 800px; background: #000; }
+    #log { white-space: pre-wrap; margin-top: 1rem; font-size: 0.9rem; }
+    button { margin-right: 0.5rem; }
+    label { display: inline-block; min-width: 120px; }
+    .mono { font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>HLS player with manual key input</h1>
+
+  <video id="video" controls playsinline></video>
+
+  <div>
+    <label for="m3u8Url">Playlist URL</label>
+    <input id="m3u8Url" type="text" style="width: 30rem;" placeholder="https://example.com/output.m3u8" />
+  </div>
+  <div>
+    <label for="keyHex">AES Key (hex)</label>
+    <input id="keyHex" class="mono" type="text" style="width: 30rem;" placeholder="16 or 32 bytes hex" />
+  </div>
+  <div>
+    <button id="playBtn">Play</button>
+    <button id="stopBtn">Stop</button>
+  </div>
+
+  <div id="log"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+    const videoEl = document.getElementById('video');
+    const playBtn = document.getElementById('playBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const m3u8Input = document.getElementById('m3u8Url');
+    const keyHexInput = document.getElementById('keyHex');
+    const logEl = document.getElementById('log');
+
+    function log(msg) {
+      console.log(msg);
+      logEl.textContent += msg + '\n';
+    }
+
+    let hls = null;
+
+    function hexToBytes(hex) {
+      return new Uint8Array(hex.match(/.{2}/g).map(b => parseInt(b, 16)));
+    }
+
+    class ManualKeyLoader {
+      load(context, config, callbacks) {
+        if (context.type === 'key') {
+          // Instead of fetching from URI, inject user-provided key
+          const hex = keyHexInput.value.trim();
+          if (!hex) {
+            callbacks.onError(new Error('No key provided'), context);
+            return;
+          }
+          const data = hexToBytes(hex);
+          const stats = { trequest: performance.now(), tload: performance.now() };
+          callbacks.onSuccess({ data }, stats, context);
+        } else {
+          // Fallback to default fetch for other resources
+          fetch(context.url)
+            .then(res => res.arrayBuffer())
+            .then(buf => {
+              const stats = { trequest: performance.now(), tload: performance.now() };
+              callbacks.onSuccess({ data: buf }, stats, context);
+            })
+            .catch(err => callbacks.onError(err, context));
+        }
+      }
+      abort() {}
+      destroy() {}
+    }
+
+    function start() {
+      const url = m3u8Input.value.trim();
+      if (!url) {
+        alert('Provide a valid .m3u8 URL');
+        return;
+      }
+      stop();
+
+      if (Hls.isSupported()) {
+        hls = new Hls({
+          keyLoader: ManualKeyLoader
+        });
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          log('Manifest parsed.');
+          videoEl.play().catch(e => log('Autoplay failed: ' + e));
+        });
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          log(`hls.js error: ${data.type} | ${data.details}`);
+        });
+        hls.attachMedia(videoEl);
+        hls.loadSource(url);
+      } else if (videoEl.canPlayType('application/vnd.apple.mpegURL')) {
+        // Safari/iOS path: cannot override key manually, must use EXT-X-KEY URI
+        log('Native HLS (Safari). Manual key injection not supported.');
+        videoEl.src = url;
+        videoEl.play().catch(e => log('Autoplay failed (native): ' + e));
+      } else {
+        alert('HLS not supported in this browser.');
+      }
+    }
+
+    function stop() {
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+      videoEl.pause();
+      videoEl.removeAttribute('src');
+      videoEl.load();
+    }
+
+    playBtn.addEventListener('click', start);
+    stopBtn.addEventListener('click', stop);
+  </script>
+</body>
+</html>
